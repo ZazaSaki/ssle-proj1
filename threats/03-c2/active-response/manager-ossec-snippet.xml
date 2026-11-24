@@ -1,0 +1,14 @@
+<!-- Add inside <ossec_config> on the Wazuh MANAGER, then restart wazuh-manager.
+     Runs c2-contain.sh on the agent that reported a live C2 channel (rule 100300). -->
+<command>
+  <name>c2-contain</name>
+  <executable>c2-contain.sh</executable>
+  <timeout_allowed>yes</timeout_allowed>
+</command>
+
+<active-response>
+  <command>c2-contain</command>
+  <location>local</location>
+  <rules_id>100300</rules_id>
+  <timeout>120</timeout>
+</active-response>

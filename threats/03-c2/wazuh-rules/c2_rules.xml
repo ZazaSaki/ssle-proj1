@@ -1,0 +1,23 @@
+<!-- Threat 3 (C2 / Botnet) — Wazuh rules. IDs in the 100300 block.
+     Install on the manager (/var/ossec/etc/rules/c2_rules.xml). -->
+<group name="c2,apt,malware,">
+
+  <!-- Command-monitoring output: the victim has an ESTABLISHED connection to the
+       reverse-shell C2 port 4444 -> a C2 channel is live. -->
+  <!-- 530 = Wazuh "process monitoring" parent for full_command (ossec: output:) events -->
+  <rule id="100300" level="12">
+    <if_sid>530</if_sid>
+    <match>C2CHECK peer=</match>
+    <description>C2 channel detected: established reverse-shell connection to :4444</description>
+    <group>c2,attack,</group>
+  </rule>
+
+  <!-- Payload dropped into the loot directory (FIM realtime). 554 = file added. -->
+  <rule id="100301" level="10">
+    <if_sid>554</if_sid>
+    <field name="file">/root/loot/</field>
+    <description>Suspicious file dropped in loot dir (possible C2 payload): $(file)</description>
+    <group>c2,attack,syscheck,</group>
+  </rule>
+
+</group>
