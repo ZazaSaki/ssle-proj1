@@ -1,0 +1,23 @@
+<!-- Threat 1 (DoS) — Wazuh incident type (SIEM angle, complements Prometheus).
+     HTTP request flood from a single source against Apache. IDs 100110-100111.
+     Install on the manager (/var/ossec/etc/rules/dos_rules.xml).
+
+     Note: Wazuh's built-in web-access rule 31108 (a 200 GET) is level 0, and frequency
+     correlation counts prior ALERTS (level>0). So we add a thin level-2 base (100111)
+     that is counted, then a frequency rule (100110) on top. Apache is otherwise idle
+     here, so the level-2 events only appear during an actual flood. -->
+<group name="dos,attack,web,">
+
+  <rule id="100111" level="2">
+    <if_sid>31108</if_sid>
+    <description>Web access (base for flood detection) from $(srcip)</description>
+  </rule>
+
+  <rule id="100110" level="10" frequency="60" timeframe="10">
+    <if_matched_sid>100111</if_matched_sid>
+    <same_source_ip />
+    <description>HTTP flood / DoS: 60+ requests in 10s from $(srcip)</description>
+    <group>dos,attack,</group>
+  </rule>
+
+</group>
