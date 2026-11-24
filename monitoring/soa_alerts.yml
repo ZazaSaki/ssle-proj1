@@ -1,0 +1,60 @@
+# Alerting rules shown on Prometheus' Alerts page (Guide 3, step 5-6)
+groups:
+  - name: soa
+    rules:
+      - alert: ServiceDown
+        expr: service_health == 0
+        for: 15s
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.service_id }} is not answering /health"
+
+      - alert: RegistryDown
+        expr: registry_up == 0 or absent(registry_up)
+        for: 15s
+        labels: {severity: critical}
+        annotations:
+          summary: "Service registry is unreachable"
+
+      - alert: HighRequestRate
+        expr: rate(service_requests_total[1m]) > 20
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.service }} is receiving {{ $value | humanize }} req/s (normal is < 2)"
+
+      - alert: HighLatency
+        expr: service_health_latency_seconds > 0.5
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.service_id }} /health takes {{ $value | humanizeDuration }}"
+
+      - alert: HighErrorRatio
+        expr: rate(service_errors_total[1m]) / rate(service_requests_total[1m]) > 0.2
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.service }}: {{ $value | humanizePercentage }} of requests fail"
+
+      - alert: ContainerHighCPU
+        # CPU cores used by each container (1.0 = one full core)
+        expr: sum by (name) (rate(incus_cpu_seconds_total{mode=~"user|system"}[1m])) > 0.8
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.name }} is using {{ $value | humanize }} CPU cores"
+
+      - alert: ContainerHighNetworkIn
+        expr: rate(incus_network_receive_bytes_total{device="eth0"}[1m]) > 1e6
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.name }} receives {{ $value | humanize1024 }}B/s"
+
+      - alert: ContainerHighNetworkOut
+        expr: rate(incus_network_transmit_bytes_total{device="eth0"}[1m]) > 1e6
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.name }} sends {{ $value | humanize1024 }}B/s"

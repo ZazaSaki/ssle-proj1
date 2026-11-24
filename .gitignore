@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Secrets / credentials — NEVER commit
+*wazuh-passwords*
+*wazuh-install-files*
+*credentials*
+*.key
+*.pem
+
+# Attack payloads that could run outside the lab
+*.elf
+payload*
+*.bin
+
+# Large captures
+*.pcap
+*.pcapng
+
+# Local scratch
+*.log
+*.tmp
+temp_data.db

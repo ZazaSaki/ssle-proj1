@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOA Monitor</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --surface-2: #f3f2ee;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --band: rgba(42, 120, 214, 0.08);
+    --good: #0ca30c;
+    --good-text: #006300;
+    --warning: #fab219;
+    --serious: #ec835a;
+    --critical: #d03b3b;
+    --wash: rgba(11, 11, 11, 0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --surface-2: #222220;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --border: rgba(255, 255, 255, 0.10);
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --band: rgba(57, 135, 229, 0.12);
+      --good-text: #0ca30c;
+      --wash: rgba(255, 255, 255, 0.05);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #222220;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --band: rgba(57, 135, 229, 0.12);
+    --good-text: #0ca30c;
+    --wash: rgba(255, 255, 255, 0.05);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .sub { color: var(--ink-2); font-size: 13px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  header.top {
+    display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button, select {
+    font: inherit; font-size: 13px; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 10px; cursor: pointer;
+  }
+  button:hover, select:hover { background: var(--surface-2); }
+
+  .banner {
+    display: none; margin-bottom: 16px; padding: 10px 14px; border-radius: 10px;
+    border: 1px solid var(--critical); background: color-mix(in srgb, var(--critical) 10%, var(--surface));
+  }
+  .banner.show { display: block; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .kpi .label { color: var(--ink-2); font-size: 12px; }
+  .kpi .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+  .kpi .hint { color: var(--muted); font-size: 12px; }
+
+  section { margin-bottom: 28px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; min-width: 0; }
+  .card.down { opacity: 0.72; border-style: dashed; }
+  .card-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .card-id { min-width: 0; }
+  .card-id .kind { font-weight: 600; }
+  .card-id .url { color: var(--ink-2); font-size: 12px; }
+  .loc { display: flex; flex-wrap: wrap; gap: 3px; margin: 8px 0 10px; }
+  .loc span { background: var(--surface-2); color: var(--ink-2); border-radius: 5px; padding: 1px 6px; font-size: 11px; }
+  .loc span + span::before { content: none; }
+
+  .status { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; white-space: nowrap;
+            padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink); }
+  .status svg { flex: none; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; margin-bottom: 10px; }
+  .stats div { min-width: 0; }
+  .stats .k { color: var(--muted); font-size: 11px; }
+  .stats .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .hb { margin-bottom: 10px; }
+  .hb .row { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .hb .track { height: 6px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+  .hb .fill { height: 100%; border-radius: 3px; transition: width .3s; }
+
+  .spark { display: flex; align-items: center; gap: 10px; }
+  .spark svg { flex: 1; min-width: 0; height: 30px; }
+  .spark .rate { font-size: 12px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .endpoints { margin-top: 8px; font-size: 11px; color: var(--muted); }
+  .endpoints code { color: var(--ink-2); }
+  .dismiss { font-size: 12px; padding: 2px 8px; margin-top: 8px; }
+
+  .chart-wrap { position: relative; }
+  .chart-wrap svg { display: block; width: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--ink-2); margin-bottom: 8px; }
+  .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  .tip {
+    position: absolute; pointer-events: none; display: none; z-index: 2;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 8px 10px; font-size: 12px; min-width: 160px;
+  }
+  .tip .t { color: var(--muted); margin-bottom: 4px; }
+  .tip .r { display: flex; justify-content: space-between; gap: 12px; }
+  .tip .r b { font-variant-numeric: tabular-nums; }
+
+  .two { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 12px; }
+  @media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .scroll { max-height: 320px; overflow: auto; }
+  .tbl-x { overflow-x: auto; }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+
+  .tree, .tree ul { list-style: none; margin: 0; padding-left: 16px; }
+  .tree { padding-left: 0; }
+  .tree li { margin: 3px 0; }
+  .tree .node { color: var(--ink-2); font-size: 12px; }
+  .tree .node b { color: var(--ink); font-weight: 600; }
+  .tree .lvl { color: var(--muted); font-size: 11px; margin-right: 4px; }
+  .tree .inst { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; margin: 2px 6px 2px 0;
+                padding: 1px 8px; border-radius: 999px; background: var(--surface-2); }
+
+  details summary { cursor: pointer; color: var(--ink-2); font-size: 12px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>SOA Monitor</h1>
+      <div class="sub">Registry <span class="mono" id="regUrl"></span> · updated <span id="updated" class="num">—</span></div>
+    </div>
+    <div class="controls">
+      <label class="sub" for="interval">Refresh</label>
+      <select id="interval">
+        <option value="1000">1 s</option>
+        <option value="2000" selected>2 s</option>
+        <option value="5000">5 s</option>
+        <option value="10000">10 s</option>
+      </select>
+      <button id="pause" type="button">Pause</button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner"></div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section>
+    <h2>Services</h2>
+    <div id="services"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Temperature readings (°C)</h2>
+    <div class="sub" id="chartSub" style="margin-bottom:8px"></div>
+    <div class="legend" id="legend"></div>
+    <div class="chart-wrap" id="chartWrap">
+      <svg id="chart" role="img" aria-label="Recent temperature readings"></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+    <details>
+      <summary>Show readings as a table</summary>
+      <div class="scroll tbl-x"><table id="readingsTable"></table></div>
+    </details>
+  </section>
+
+  <section class="two">
+    <div class="panel">
+      <h2>Sensors</h2>
+      <div class="tbl-x" id="devices"></div>
+    </div>
+    <div class="panel">
+      <h2>Anomalies <span class="sub" id="anomSub"></span></h2>
+      <div class="scroll tbl-x" id="anomalies"></div>
+    </div>
+  </section>
+
+  <section class="two">
+    <div class="panel">
+      <h2>Topology</h2>
+      <div class="sub" style="margin-bottom:8px">country › region › datacenter › rack › node</div>
+      <div id="topology"></div>
+    </div>
+    <div class="panel">
+      <h2>Registry events</h2>
+      <div class="scroll tbl-x" id="events"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ---------- config ----------
+const params = new URLSearchParams(location.search);
+const REGISTRY = params.get("registry") ||
+  (location.protocol.startsWith("http") ? location.origin : "http://localhost:5050");
+const SERVICE_ORDER = ["registry", "ingestion-service", "storage-service", "analytics-service"];
+const LEVELS = ["country", "region", "dc", "rack", "node"];
+const HISTORY = 40;            // sparkline points kept per instance
+const READINGS_LIMIT = 120;
+
+// ---------- state ----------
+const known = new Map();       // instance_id -> {service, url, location, gone, goneAt, metrics, reachable, hist[]}
+let registryHealth = null, ttl = 15, timer = null, paused = false;
+let chartState = null, hoverX = null;
+
+// ---------- helpers ----------
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (n, d = 1) => (n === null || n === undefined || Number.isNaN(n)) ? "—" : Number(n).toFixed(d);
+const timeOf = (iso) => iso ? new Date(iso).toLocaleTimeString() : "—";
+const dbTime = (ts) => new Date(ts.replace(" ", "T") + "Z");   // SQLite CURRENT_TIMESTAMP is UTC
+function dur(s) {
+  if (s == null) return "—";
+  s = Math.floor(s);
+  if (s < 60) return s + "s";
+  if (s < 3600) return Math.floor(s / 60) + "m " + (s % 60) + "s";
+  return Math.floor(s / 3600) + "h " + Math.floor((s % 3600) / 60) + "m";
+}
+function parseId(id) {
+  const [loc, rest = ""] = id.split("/");
+  const [kind, inst = ""] = rest.split("#");
+  return { loc: loc.split("."), kind, inst };
+}
+
+async function getJSON(url, ms = 2000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  const t0 = performance.now();
+  try {
+    const r = await fetch(url, { signal: ctrl.signal, cache: "no-store" });
+    const body = await r.json();
+    return { ok: r.ok, status: r.status, body, ms: performance.now() - t0 };
+  } catch (e) {
+    return { ok: false, error: e.name === "AbortError" ? "timeout" : "unreachable" };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+// status: icon + label, never color alone
+const STATUS = {
+  up:       { label: "Up",       color: "var(--good)",
+              icon: '<circle cx="6" cy="6" r="5" fill="var(--good)"/>' },
+  degraded: { label: "Degraded", color: "var(--warning)",
+              icon: '<path d="M6 1 L11 11 H1 Z" fill="var(--warning)"/>' },
+  down:     { label: "Down",     color: "var(--critical)",
+              icon: '<path d="M2 2 L10 10 M10 2 L2 10" stroke="var(--critical)" stroke-width="2.4" stroke-linecap="round"/>' },
+};
+function badge(st, title = "") {
+  const s = STATUS[st];
+  return `<span class="status" title="${esc(title)}"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">${s.icon}</svg>${s.label}</span>`;
+}
+
+// ---------- polling ----------
+async function poll() {
+  const [svc, health, evs] = await Promise.all([
+    getJSON(`${REGISTRY}/services`), getJSON(`${REGISTRY}/health`), getJSON(`${REGISTRY}/events?limit=60`),
+  ]);
+  const regUp = svc.ok;
+  $("banner").className = "banner" + (regUp ? "" : " show");
+  $("banner").innerHTML = regUp ? "" :
+    `${badge("down")} <b>Registry unreachable</b> at <span class="mono">${esc(REGISTRY)}</span> — showing last known state. Start it with <span class="mono">./run_all.sh</span>.`;
+
+  registryHealth = health.ok ? { ...health.body, ms: health.ms } : null;
+  if (registryHealth) ttl = registryHealth.heartbeat_ttl_s || ttl;
+
+  if (regUp) {
+    const seen = new Set();
+    for (const [service, list] of Object.entries(svc.body)) {
+      for (const inst of list) {
+        seen.add(inst.instance_id);
+        const k = known.get(inst.instance_id) || { hist: [] };
+        Object.assign(k, { service, ...inst, gone: false, goneAt: null });
+        known.set(inst.instance_id, k);
+      }
+    }
+    for (const [id, k] of known) if (!seen.has(id) && !k.gone) { k.gone = true; k.goneAt = new Date(); }
+  }
+
+  // Probe every live instance directly from the browser
+  await Promise.all([...known.values()].filter((k) => !k.gone).map(async (k) => {
+    const m = await getJSON(`${k.url}/metrics`, 1500);
+    k.reachable = m.ok;
+    k.browserMs = m.ms;
+    if (m.ok) {
+      k.metrics = m.body;
+      k.hist.push({ t: performance.now(), req: m.body.requests, err: m.body.errors });
+      if (k.hist.length > HISTORY + 1) k.hist.shift();
+    } else {
+      k.error = m.error;
+    }
+  }));
+
+  // Data panels via discovered analytics + storage
+  const pick = (name) => [...known.values()].find((k) => k.service === name && !k.gone && k.reachable);
+  const analytics = pick("analytics-service"), storage = pick("storage-service");
+  const [stats, anom, readings] = await Promise.all([
+    analytics ? getJSON(`${analytics.url}/stats`) : null,
+    analytics ? getJSON(`${analytics.url}/anomalies`) : null,
+    storage ? getJSON(`${storage.url}/readings?limit=${READINGS_LIMIT}`) : null,
+  ]);
+
+  render({
+    regUp,
+    events: evs.ok ? evs.body : null,
+    stats: stats?.ok ? stats.body : null,
+    anom: anom?.ok ? anom.body : null,
+    readings: readings?.ok ? readings.body : null,
+  });
+  $("updated").textContent = new Date().toLocaleTimeString();
+}
+
+function statusOf(k) {
+  if (k.gone) return "down";
+  if (!k.reachable) return "degraded";
+  if (k.heartbeat_age_s > ttl * 0.67) return "degraded";
+  return "up";
+}
+
+// ---------- rendering ----------
+let lastData = null;
+function render(d) {
+  lastData = d;
+  renderKpis(d);
+  renderServices(d.regUp);
+  renderChart(d.readings, d.anom);
+  renderDevices(d.stats, d.readings);
+  renderAnomalies(d.anom);
+  renderTopology();
+  renderEvents(d.events);
+}
+
+function renderKpis(d) {
+  const live = [...known.values()].filter((k) => !k.gone);
+  const up = live.filter((k) => statusOf(k) === "up").length;
+  const down = [...known.values()].filter((k) => k.gone).length;
+  const o = d.stats?.overall;
+  const tiles = [
+    { label: "Healthy instances", value: `${up} / ${live.length}`,
+      hint: down ? `${down} down since page load` : (d.regUp ? "registry up" : "registry unreachable") },
+    { label: "Readings analysed", value: o ? o.count : "—", hint: "latest 1000 via analytics" },
+    { label: "Average temperature", value: o?.average != null ? fmt(o.average, 2) + " °C" : "—",
+      hint: o ? `min ${fmt(o.min, 1)} · max ${fmt(o.max, 1)}` : "analytics unavailable" },
+    { label: "Anomalies", value: d.anom ? d.anom.anomalies.length : "—",
+      hint: d.anom ? `beyond ${d.anom.threshold_sigma}σ of the mean` : "analytics unavailable" },
+  ];
+  $("kpis").innerHTML = tiles.map((t) =>
+    `<div class="kpi"><div class="label">${esc(t.label)}</div><div class="value">${esc(t.value)}</div><div class="hint">${esc(t.hint)}</div></div>`
+  ).join("");
+}
+
+function sparkline(hist) {
+  const W = 200, H = 30;
+  const rates = [];
+  for (let i = 1; i < hist.length; i++) {
+    const dt = (hist[i].t - hist[i - 1].t) / 1000;
+    rates.push(dt > 0 ? Math.max(0, (hist[i].req - hist[i - 1].req) / dt) : 0);
+  }
+  if (rates.length < 2) return { svg: `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`, rate: null };
+  const max = Math.max(...rates, 0.5);
+  const x = (i) => (i / (HISTORY - 1)) * W;
+  const off = HISTORY - rates.length;
+  const y = (v) => H - 3 - (v / max) * (H - 6);
+  const d = rates.map((v, i) => `${i ? "L" : "M"}${x(i + off).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  return {
+    svg: `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <line x1="0" x2="${W}" y1="${H - 3}" y2="${H - 3}" stroke="var(--grid)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+      <path d="${d}" fill="none" stroke="var(--series-1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </svg>`,
+    rate: rates[rates.length - 1],
+  };
+}
+
+function registryCard() {
+  const h = registryHealth;
+  const st = h ? "up" : "down";
+  return `<div class="card ${h ? "" : "down"}">
+    <div class="card-head">
+      <div class="card-id"><div class="kind">registry</div><div class="url mono">${esc(REGISTRY)}</div></div>
+      ${badge(st)}
+    </div>
+    <div class="loc"><span>control plane</span></div>
+    <div class="stats">
+      <div><div class="k">Uptime</div><div class="v">${dur(h?.uptime_s)}</div></div>
+      <div><div class="k">Instances</div><div class="v">${h ? h.instances : "—"}</div></div>
+      <div><div class="k">Response</div><div class="v">${h ? fmt(h.ms, 0) + " ms" : "—"}</div></div>
+      <div><div class="k">Heartbeat TTL</div><div class="v">${h ? h.heartbeat_ttl_s + " s" : "—"}</div></div>
+      <div><div class="k">Probe every</div><div class="v">${h ? h.probe_interval_s + " s" : "—"}</div></div>
+    </div>
+  </div>`;
+}
+
+function instanceCard(k) {
+  const st = statusOf(k);
+  const { loc, kind, inst } = parseId(k.instance_id);
+  const m = k.metrics || {};
+  const age = k.gone ? null : k.heartbeat_age_s;
+  const pct = age == null ? 0 : Math.min(100, (age / ttl) * 100);
+  const hbColor = pct > 67 ? "var(--critical)" : pct > 40 ? "var(--warning)" : "var(--good)";
+  const sp = sparkline(k.hist);
+  const why = k.gone ? `removed from registry at ${k.goneAt.toLocaleTimeString()}`
+    : !k.reachable ? `registered, but /metrics ${k.error || "failed"} from the browser`
+    : st === "degraded" ? "heartbeat late" : "registered, heartbeating and answering";
+  const eps = Object.entries(m.endpoints || {}).map(([e, n]) => `<code>${esc(e)}</code> ${n}`).join(" · ");
+  return `<div class="card ${k.gone ? "down" : ""}">
+    <div class="card-head">
+      <div class="card-id"><div class="kind">${esc(kind)} <span class="sub">#${esc(inst)}</span></div>
+        <div class="url mono">${esc(k.url)}</div></div>
+      ${badge(st, why)}
+    </div>
+    <div class="loc" title="${esc(k.instance_id)}">${loc.map((p, i) => `<span title="${LEVELS[i] || ""}">${esc(p)}</span>`).join("")}</div>
+    ${k.gone ? `<div class="sub">${esc(why)}</div><button class="dismiss" data-dismiss="${esc(k.instance_id)}">Dismiss</button>` : `
+    <div class="stats">
+      <div><div class="k">Uptime</div><div class="v">${dur(m.uptime_s)}</div></div>
+      <div><div class="k">Requests</div><div class="v">${m.requests ?? "—"}</div></div>
+      <div><div class="k">Errors</div><div class="v">${m.errors ?? "—"}</div></div>
+      <div><div class="k">Avg latency</div><div class="v">${m.avg_latency_ms != null ? fmt(m.avg_latency_ms, 1) + " ms" : "—"}</div></div>
+      <div><div class="k">Probe</div><div class="v">${k.probe_latency_ms != null ? fmt(k.probe_latency_ms, 0) + " ms" : "pending"}</div></div>
+      <div><div class="k">Last request</div><div class="v">${m.last_request_at ? timeOf(m.last_request_at * 1000) : "—"}</div></div>
+    </div>
+    <div class="hb">
+      <div class="row"><span>Last heartbeat</span><span class="num">${fmt(age, 1)} s / ${ttl} s</span></div>
+      <div class="track"><div class="fill" style="width:${pct}%;background:${hbColor}"></div></div>
+    </div>
+    <div class="spark">${sp.svg}<span class="rate">${sp.rate != null ? fmt(sp.rate, 2) + " req/s" : "collecting…"}</span></div>
+    ${eps ? `<div class="endpoints">${eps}</div>` : ""}`}
+  </div>`;
+}
+
+function renderServices() {
+  const groups = new Map();
+  for (const k of known.values()) {
+    if (!groups.has(k.service)) groups.set(k.service, []);
+    groups.get(k.service).push(k);
+  }
+  const names = [...groups.keys()].sort((a, b) =>
+    (SERVICE_ORDER.indexOf(a) + 1 || 99) - (SERVICE_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  const cards = [registryCard()];
+  for (const n of names) cards.push(...groups.get(n)
+    .sort((a, b) => a.instance_id.localeCompare(b.instance_id)).map(instanceCard));
+  const summary = names.map((n) => `${groups.get(n).filter((k) => !k.gone).length}× ${n}`).join(" · ");
+  let html = `<div class="sub" style="margin-bottom:10px">${esc(summary || "No services registered yet.")}</div>
+    <div class="cards">${cards.join("")}</div>`;
+  $("services").innerHTML = html;
+}
+$("services").addEventListener("click", (e) => {
+  const id = e.target.dataset?.dismiss;
+  if (id) { known.delete(id); renderServices(); renderTopology(); }
+});
+
+// ---------- chart ----------
+const SERIES = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
+function niceStep(range, target = 5) {
+  const raw = range / target, p = Math.pow(10, Math.floor(Math.log10(raw)));
+  return [1, 2, 2.5, 5, 10].map((m) => m * p).find((s) => s >= raw) || raw;
+}
+
+function renderChart(readings, anom) {
+  const svg = $("chart"), wrap = $("chartWrap");
+  if (!readings || !readings.length) {
+    chartState = null;
+    svg.setAttribute("viewBox", "0 0 600 60"); svg.style.height = "60px";
+    svg.innerHTML = `<text x="0" y="30" fill="var(--muted)" font-size="13">${readings ? "No readings stored yet." : "Storage service unavailable."}</text>`;
+    $("legend").innerHTML = ""; $("chartSub").textContent = ""; $("readingsTable").innerHTML = "";
+    return;
+  }
+  const rows = readings.map((r) => ({ ...r, date: dbTime(r.timestamp) })).sort((a, b) => a.date - b.date);
+  const devices = [...new Set(rows.map((r) => r.device_id))].sort();
+  const colorOf = (d) => SERIES[devices.indexOf(d)] || "var(--muted)";
+  const anomKey = new Set((anom?.anomalies || []).map((a) => `${a.device_id}|${a.timestamp}|${a.temperature}`));
+  rows.forEach((r) => (r.anomaly = anomKey.has(`${r.device_id}|${r.timestamp}|${r.temperature}`)));
+
+  const W = Math.max(320, wrap.clientWidth), H = 260, m = { l: 44, r: 12, t: 12, b: 28 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const mean = anom?.mean, sd = anom?.stdev, k = anom?.threshold_sigma ?? 2;
+  const vals = rows.map((r) => r.temperature);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (mean != null && sd) { lo = Math.min(lo, mean - k * sd); hi = Math.max(hi, mean + k * sd); }
+  const step = niceStep(Math.max(hi - lo, 1));
+  lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const t0 = rows[0].date.getTime(), t1 = Math.max(rows[rows.length - 1].date.getTime(), t0 + 1000);
+  const x = (d) => m.l + ((d.getTime() - t0) / (t1 - t0)) * iw;
+  const y = (v) => m.t + ih - ((v - lo) / (hi - lo)) * ih;
+
+  let g = "";
+  for (let v = lo; v <= hi + 1e-9; v += step) {
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>
+          <text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end" fill="var(--muted)" font-size="11" class="num">${fmt(v, step < 1 ? 1 : 0)}</text>`;
+  }
+  const nx = Math.max(2, Math.min(6, Math.floor(iw / 110)));
+  for (let i = 0; i <= nx; i++) {
+    const d = new Date(t0 + ((t1 - t0) * i) / nx);
+    g += `<text x="${x(d)}" y="${H - 8}" text-anchor="${i === 0 ? "start" : i === nx ? "end" : "middle"}" fill="var(--muted)" font-size="11">${d.toLocaleTimeString()}</text>`;
+  }
+  g += `<line x1="${m.l}" x2="${W - m.r}" y1="${m.t + ih}" y2="${m.t + ih}" stroke="var(--axis)" stroke-width="1"/>`;
+
+  // anomaly threshold band (mean ± kσ) + mean line
+  if (mean != null && sd) {
+    g += `<rect x="${m.l}" y="${y(mean + k * sd)}" width="${iw}" height="${y(mean - k * sd) - y(mean + k * sd)}" fill="var(--band)"/>
+          <line x1="${m.l}" x2="${W - m.r}" y1="${y(mean)}" y2="${y(mean)}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4 4"/>`;
+  }
+  for (const dev of devices) {
+    const pts = rows.filter((r) => r.device_id === dev);
+    const d = pts.map((r, i) => `${i ? "L" : "M"}${x(r.date).toFixed(1)},${y(r.temperature).toFixed(1)}`).join(" ");
+    g += `<path d="${d}" fill="none" stroke="${colorOf(dev)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  for (const r of rows.filter((r) => r.anomaly)) {
+    g += `<circle cx="${x(r.date)}" cy="${y(r.temperature)}" r="6" fill="var(--surface)" stroke="var(--surface)" stroke-width="4"/>
+          <circle cx="${x(r.date)}" cy="${y(r.temperature)}" r="5" fill="var(--surface)" stroke="var(--critical)" stroke-width="2"/>
+          <text x="${x(r.date)}" y="${y(r.temperature) + 3.5}" text-anchor="middle" fill="var(--critical)" font-size="9" font-weight="700">!</text>`;
+  }
+  g += `<g id="hover"></g>`;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.style.height = H + "px";
+  svg.innerHTML = g;
+  chartState = { rows, x, y, m, W, H, ih, colorOf };
+
+  $("legend").innerHTML = devices.length > 1
+    ? devices.slice(0, 3).map((d) => `<span><i style="background:${colorOf(d)}"></i>${esc(d)}</span>`).join("") +
+      (devices.length > 3 ? `<span><i style="background:var(--muted)"></i>other (${devices.length - 3})</span>` : "")
+    : "";
+  $("chartSub").innerHTML = `Last ${rows.length} readings from storage` +
+    (devices.length === 1 ? ` · sensor <span class="mono">${esc(devices[0])}</span>` : "") +
+    (mean != null ? ` · dashed line = mean ${fmt(mean, 1)} °C, shaded band = normal range (±${k}σ)` : "") +
+    ` · <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true" style="vertical-align:-1px"><circle cx="6" cy="6" r="4.5" fill="none" stroke="var(--critical)" stroke-width="2"/></svg> anomaly`;
+
+  $("readingsTable").innerHTML = `<thead><tr><th>Time</th><th>Sensor</th><th class="n">°C</th><th>Flag</th></tr></thead><tbody>` +
+    rows.slice().reverse().map((r) => `<tr><td class="num">${r.date.toLocaleTimeString()}</td><td class="mono">${esc(r.device_id)}</td>
+      <td class="n">${fmt(r.temperature, 2)}</td><td>${r.anomaly ? "Anomaly" : ""}</td></tr>`).join("") + `</tbody>`;
+  if (hoverX != null) showHover(hoverX);
+}
+
+function showHover(px) {
+  const s = chartState, tip = $("tip"), layer = document.getElementById("hover");
+  if (!s || !layer) return;
+  let best = null;
+  for (const r of s.rows) {
+    const dx = Math.abs(s.x(r.date) - px);
+    if (!best || dx < best.dx) best = { r, dx };
+  }
+  if (!best || px < s.m.l - 10 || px > s.W - s.m.r + 10) { hideHover(); return; }
+  const r = best.r, cx = s.x(r.date), cy = s.y(r.temperature);
+  layer.innerHTML = `<line x1="${cx}" x2="${cx}" y1="${s.m.t}" y2="${s.m.t + s.ih}" stroke="var(--axis)" stroke-width="1"/>
+    <circle cx="${cx}" cy="${cy}" r="5" fill="${s.colorOf(r.device_id)}" stroke="var(--surface)" stroke-width="2"/>`;
+  tip.innerHTML = `<div class="t">${r.date.toLocaleTimeString()}</div>
+    <div class="r"><span>${esc(r.device_id.split("/").pop())}</span><b>${fmt(r.temperature, 2)} °C</b></div>
+    ${r.anomaly ? `<div class="r" style="margin-top:4px">${badge("down").replace("Down", "Anomaly")}</div>` : ""}`;
+  tip.style.display = "block";
+  const wrap = $("chartWrap"), scale = wrap.clientWidth / s.W;
+  let left = cx * scale + 12;
+  if (left + tip.offsetWidth > wrap.clientWidth) left = cx * scale - tip.offsetWidth - 12;
+  tip.style.left = left + "px";
+  tip.style.top = Math.max(0, cy - 20) + "px";
+}
+function hideHover() {
+  $("tip").style.display = "none";
+  const layer = document.getElementById("hover");
+  if (layer) layer.innerHTML = "";
+}
+$("chartWrap").addEventListener("mousemove", (e) => {
+  if (!chartState) return;
+  const rect = $("chart").getBoundingClientRect();
+  hoverX = (e.clientX - rect.left) * (chartState.W / rect.width);
+  showHover(hoverX);
+});
+$("chartWrap").addEventListener("mouseleave", () => { hoverX = null; hideHover(); });
+
+// ---------- tables ----------
+function renderDevices(stats, readings) {
+  if (!stats) { $("devices").innerHTML = `<div class="empty">Analytics service unavailable.</div>`; return; }
+  const last = {};
+  for (const r of readings || []) {
+    const d = dbTime(r.timestamp);
+    if (!last[r.device_id] || d > last[r.device_id]) last[r.device_id] = d;
+  }
+  const rows = Object.entries(stats.per_device);
+  if (!rows.length) { $("devices").innerHTML = `<div class="empty">No sensor data yet.</div>`; return; }
+  $("devices").innerHTML = `<table><thead><tr><th>Sensor</th><th class="n">Readings</th><th class="n">Avg</th><th class="n">Min</th><th class="n">Max</th><th class="n">Last seen</th></tr></thead><tbody>` +
+    rows.map(([id, s]) => {
+      const seen = last[id];
+      const stale = seen && (Date.now() - seen) / 1000 > 30;
+      return `<tr><td class="mono">${esc(id)}</td><td class="n">${s.count}</td><td class="n">${fmt(s.average, 2)}</td>
+        <td class="n">${fmt(s.min, 1)}</td><td class="n">${fmt(s.max, 1)}</td>
+        <td class="n">${seen ? (stale ? badge("degraded", "no reading in 30 s") + " " : "") + seen.toLocaleTimeString() : "—"}</td></tr>`;
+    }).join("") + `</tbody></table>`;
+}
+
+function renderAnomalies(anom) {
+  if (!anom) { $("anomalies").innerHTML = `<div class="empty">Analytics service unavailable.</div>`; $("anomSub").textContent = ""; return; }
+  $("anomSub").textContent = anom.mean != null ? `mean ${fmt(anom.mean, 2)} °C, σ ${fmt(anom.stdev, 2)}` : "";
+  const list = anom.anomalies.slice(0, 50);
+  $("anomalies").innerHTML = list.length
+    ? `<table><thead><tr><th>Time</th><th>Sensor</th><th class="n">°C</th><th class="n">Deviation</th></tr></thead><tbody>` +
+      list.map((a) => `<tr><td class="num">${dbTime(a.timestamp).toLocaleTimeString()}</td><td class="mono">${esc(a.device_id.split("/").pop())}</td>
+        <td class="n">${fmt(a.temperature, 2)}</td><td class="n">${anom.stdev ? (a.temperature - anom.mean >= 0 ? "+" : "") + fmt((a.temperature - anom.mean) / anom.stdev, 1) + "σ" : "—"}</td></tr>`).join("") +
+      `</tbody></table>`
+    : `<div class="empty">No readings outside ±${anom.threshold_sigma}σ.</div>`;
+}
+
+function renderTopology() {
+  const root = {};
+  for (const k of known.values()) {
+    let node = root;
+    parseId(k.instance_id).loc.forEach((p) => { node.children ??= {}; node = node.children[p] ??= {}; });
+    (node.instances ??= []).push(k);
+  }
+  const draw = (node, depth) => Object.entries(node.children || {}).sort().map(([name, child]) =>
+    `<li><span class="node"><span class="lvl">${LEVELS[depth] || ""}</span><b>${esc(name)}</b></span>
+      ${child.instances ? `<div>${child.instances.map((k) => {
+        const { kind, inst } = parseId(k.instance_id);
+        const st = STATUS[statusOf(k)];
+        return `<span class="inst" title="${esc(k.instance_id)} — ${st.label}"><svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true">${st.icon}</svg>${esc(kind)}#${esc(inst)}<span class="sub"> ${st.label}</span></span>`;
+      }).join("")}</div>` : ""}
+      ${child.children ? `<ul>${draw(child, depth + 1)}</ul>` : ""}</li>`).join("");
+  $("topology").innerHTML = known.size ? `<ul class="tree">${draw(root, 0)}</ul>` : `<div class="empty">No services known yet.</div>`;
+}
+
+function renderEvents(evs) {
+  if (!evs) { $("events").innerHTML = `<div class="empty">Registry unreachable.</div>`; return; }
+  if (!evs.length) { $("events").innerHTML = `<div class="empty">No events yet.</div>`; return; }
+  const map = { register: ["up", "Registered"], unregister: ["degraded", "Unregistered"], evict: ["down", "Evicted"] };
+  $("events").innerHTML = `<table><thead><tr><th>Time</th><th>Event</th><th>Instance</th></tr></thead><tbody>` +
+    evs.map((e) => {
+      const [st, label] = map[e.type] || ["degraded", e.type];
+      return `<tr><td class="num">${timeOf(e.ts)}</td><td>${badge(st).replace(STATUS[st].label, esc(label))}</td>
+        <td><span class="mono">${esc(e.instance_id)}</span>${e.type === "evict" ? `<div class="sub">${esc(e.detail)}</div>` : ""}</td></tr>`;
+    }).join("") + `</tbody></table>`;
+}
+
+// ---------- loop ----------
+function schedule() {
+  clearTimeout(timer);
+  if (!paused) timer = setTimeout(async () => { await poll(); schedule(); }, +$("interval").value);
+}
+$("interval").addEventListener("change", schedule);
+$("pause").addEventListener("click", () => {
+  paused = !paused;
+  $("pause").textContent = paused ? "Resume" : "Pause";
+  if (!paused) poll().then(schedule); else clearTimeout(timer);
+});
+window.addEventListener("resize", () => { if (lastData) renderChart(lastData.readings, lastData.anom); });
+$("regUrl").textContent = REGISTRY;
+poll().then(schedule);
+</script>
+</body>
+</html>
