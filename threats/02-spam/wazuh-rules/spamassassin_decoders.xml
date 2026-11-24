@@ -1,0 +1,24 @@
+<!-- Threat 2 (Spam) — decoders for SpamAssassin spamd log lines in /var/log/mail.log
+     Install on the Wazuh MANAGER at /var/ossec/etc/decoders/spamassassin_decoders.xml
+     Example lines:
+       spamd[406]: spamd: identified spam (1003.7/5.0) for root:65534 in 0.1 seconds, 91 bytes.
+       spamd[406]: spamd: result: Y 1003 - GTUBE,MISSING_DATE,... scantime=0.1,...
+       spamd[406]: spamd: clean message (1.2/5.0) for debian-spamd:109 in 0.2 seconds, 500 bytes.
+-->
+<decoder name="spamd">
+  <program_name>spamd</program_name>
+</decoder>
+
+<decoder name="spamd-identified">
+  <parent>spamd</parent>
+  <prematch>identified spam </prematch>
+  <regex type="pcre2">\(([\d.]+)/([\d.]+)\) for (\S+?):</regex>
+  <order>sa_score, sa_threshold, sa_user</order>
+</decoder>
+
+<decoder name="spamd-clean">
+  <parent>spamd</parent>
+  <prematch>clean message </prematch>
+  <regex type="pcre2">\(([\d.-]+)/([\d.]+)\) for (\S+?):</regex>
+  <order>sa_score, sa_threshold, sa_user</order>
+</decoder>
