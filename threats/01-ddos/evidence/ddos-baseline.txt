@@ -1,0 +1,5 @@
+BASELINE  target=http://10.255.255.204:5003/anomalies  n=40 c=1
+  [pre] analytics req/s=0.309 health_lat_s=0.003 avg_lat_s=0.112 soa_cpu_cores=0.044
+  load-client-a:
+    rps=34.71 complete=40 failed=33 non2xx=0 p50=29ms p95=33ms
+  [post] analytics req/s=0.891 health_lat_s=0.006 avg_lat_s=0.108 soa_cpu_cores=0.044

@@ -1,0 +1,9 @@
+ATTACK  target=http://10.255.255.204:5003/anomalies  2 clients x (-t 60s -c 10)  [time-boxed, lab-only]
+  [pre] analytics req/s=1.018 health_lat_s=0.004 avg_lat_s=0.107 soa_cpu_cores=0.06
+  [mid] analytics req/s=22.745 health_lat_s=0.202 avg_lat_s=0.182 soa_cpu_cores=0.874
+  load-client-a:
+    rps=30.43 complete=1826 failed=1087 non2xx=0 p50=289ms p95=488ms
+  load-client-b:
+    rps=30.65 complete=1840 failed=1103 non2xx=0 p50=291ms p95=488ms
+  [post] analytics req/s=61.527 health_lat_s=0.067 avg_lat_s=0.167 soa_cpu_cores=1.641
+  (let alerts settle ~30s, then check evidence.sh)

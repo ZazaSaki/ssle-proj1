@@ -58,3 +58,40 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "{{ $labels.name }} sends {{ $value | humanize1024 }}B/s"
+
+  # --- Threat 1 (DoS/DDoS): availability / quality-of-service ---------------
+  # Measured healthy baseline (no attacker): analytics request latency ~0.015 s,
+  # /health probe latency ~0.005 s, request rate < 0.2 req/s, soa-container < 0.1 CPU core.
+  #
+  # Alert window  : `for: 30s` — the degradation must be SUSTAINED, so a single
+  #                 expensive request or a brief flash-crowd spike does not page.
+  # Recovery      : Prometheus auto-resolves when the expression is false again;
+  #                 with for:30s the alert clears ~30-60 s after latency returns
+  #                 to baseline. Trade-off: a longer window = fewer false positives
+  #                 from benign flash crowds but a slower detection (here ~30 s).
+  - name: soa_qos
+    rules:
+      - alert: QoSDegraded_AnalyticsLatency
+        # Real-time signal: the exporter probes /health every 5 s. /health is cheap,
+        # so it only gets slow when workers/sockets are saturated — i.e. real QoS loss,
+        # not merely a slow single request. Baseline ~0.005 s; alert > 10x sustained.
+        expr: max(service_health_latency_seconds{service="analytics-service"}) > 0.05
+        for: 30s
+        labels: {severity: critical, threat: dos}
+        annotations:
+          summary: "analytics /health latency {{ $value | humanizeDuration }} (baseline ~5ms) — availability degraded"
+
+      - alert: DoS_RequestFlood
+        # Correlates with the latency alert to separate a real flood from a slow backend
+        expr: sum by (service) (rate(service_requests_total[1m])) > 10
+        for: 30s
+        labels: {severity: critical, threat: dos}
+        annotations:
+          summary: "{{ $labels.service }} flooded at {{ $value | humanize }} req/s (baseline < 0.2)"
+
+      - alert: DoS_TargetCPUSaturated
+        expr: sum by (name) (rate(incus_cpu_seconds_total{name="soa-container",mode=~"user|system"}[1m])) > 0.8
+        for: 30s
+        labels: {severity: warning, threat: dos}
+        annotations:
+          summary: "soa-container CPU saturated at {{ $value | humanize }} cores — resource exhaustion"

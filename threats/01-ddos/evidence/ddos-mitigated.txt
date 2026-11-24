@@ -1,0 +1,14 @@
+== apply rate-limit on soa-container (ports 5001,5003)
+rate limit: > 10/second new connections per source IP (burst 30) are dropped
+== re-run attack WITH mitigation active
+  [pre] analytics req/s=0.345 health_lat_s=0.003 avg_lat_s=0.168 soa_cpu_cores=0.042
+  [mid] analytics req/s=10.8 health_lat_s=0.003 avg_lat_s=0.18 soa_cpu_cores=0.251
+    rps=10.22 complete=619 failed=467 non2xx=0 p50=1053ms p95=2307ms
+    rps=10.30 complete=623 failed=470 non2xx=0 p50=1067ms p95=2146ms
+  [post] analytics req/s=20.31 health_lat_s=0.003 avg_lat_s=0.166 soa_cpu_cores=0.446
+== rate-limit counters (packets dropped)
+ pkts bytes target     prot opt in     out     source               destination         
+  958 57480 DROP       tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp flags:0x17/0x02 limit: above 10/sec burst 30 mode srcip
+== legitimate client still served?
+18:26:27 /anomalies -> 200 in 18 ms, 49 anomalies
+18:26:30 /anomalies -> 200 in 17 ms, 49 anomalies
