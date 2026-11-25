@@ -18,15 +18,17 @@ echo "== fix ownership + register active-responses on the manager"
 incus exec wazuh-container -- bash -c '
 chown wazuh:wazuh /var/ossec/etc/decoders/spamassassin_decoders.xml /var/ossec/etc/rules/*.xml
 C=/var/ossec/etc/ossec.conf
-add_ar() {  # add_ar <command> <rules_id>
+add_ar() {  # add_ar <command> <rules_id> [timeout]  (timeout 0 = persistent, no auto-revert)
+  local to=${3:-120} tline=""
   grep -q "rules_id>$2<" "$C" && return
+  [ "$to" != 0 ] && tline="    <timeout>$to</timeout>"
   cat >> "$C" <<XML
 <ossec_config>
   <active-response>
     <command>$1</command>
     <location>local</location>
     <rules_id>$2</rules_id>
-    <timeout>120</timeout>
+$tline
   </active-response>
 </ossec_config>
 XML
@@ -40,8 +42,8 @@ grep -q "name>c2-contain<" "$C" || cat >> "$C" <<XML
   </command>
 </ossec_config>
 XML
-add_ar firewall-drop 100110   # DoS HTTP flood
-add_ar c2-contain   100300    # C2 channel
+add_ar firewall-drop 100110 600   # DoS HTTP flood: temporary 10-min block (per-IP)
+add_ar c2-contain   100300 0      # C2 channel: PERSISTENT containment (no auto-revert)
 # spam response is at the Postfix layer (mail_controls.sh), not a Wazuh AR
 /var/ossec/bin/wazuh-analysisd -t >/dev/null && echo "config OK"
 systemctl restart wazuh-manager

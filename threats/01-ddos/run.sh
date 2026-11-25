@@ -30,7 +30,7 @@ ab_on(){ # ab_on <container> <args...>  -> prints parsed worksheet line
     /Requests per second/{rps=$4}
     /Complete requests/{comp=$3}
     /Failed requests/{fail=$3}
-    /Non-2xx/{non2xx=$4}
+    /Non-2xx/{non2xx=$3}
     /^Total:/{median=$5} # mean section; we also grab p95 below
     /50%/{p50=$2} /95%/{p95=$2}
     END{printf "    rps=%s complete=%s failed=%s non2xx=%s p50=%sms p95=%sms\n", rps, comp, fail, (non2xx==""?0:non2xx), p50, p95}'

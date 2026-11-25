@@ -220,19 +220,25 @@ payload; `multi/handler` listener; payload executed on the victim `apache-contai
 meterpreter session over the bridge.
 
 **Monitoring (Wazuh, two angles).** 100301 — FIM realtime on `/root/loot` catches the
-payload drop. 100300 — command monitoring (`ss … dst :4444` every 15 s, child of the
-built-in full_command rule 530) catches the live C2 connection.
+payload drop. 100300 — command monitoring every 15 s, child of the built-in full_command
+rule 530, catches the live C2 connection. The check is **port-agnostic**: a web server only
+*accepts* connections on `:80`, so any *outbound* ESTABLISHED connection it initiates to a
+lab host (excluding DNS and the Wazuh manager) is the reverse shell — this flags 4444, 443,
+8080 or a randomized port alike, not just the demo port.
 
-**Action-response (`c2-contain.sh`, automatic on 100300).** Kill the shell process and drop
-egress to tcp/4444 on the victim.
+**Action-response (`c2-contain.sh`, automatic on 100300, persistent — no auto-revert).** It
+finds the web server's outbound shell connection(s), kills the owning process, and DROPs
+egress to that peer in a dedicated `C2-CONTAIN` chain — again port-agnostic, matching the
+detector.
 
 **Post-mortem (evidence `threats/03-c2/evidence/`).** Session opened
 (10.255.255.81:4444 → 10.255.255.241); FIM (100301) and C2 (100300) alerts both fired on
 the victim agent; containment killed the process and blocked egress; re-run payload →
-0 connections. **Limitations:** detection latency ≈ one 15 s cycle; keying on the fixed port
-4444 is demo-grade (a real adversary randomizes ports / uses 443 — baseline unexpected
-egress instead); containment cuts the channel but not persistence — a full IR adds autostart
-FIM and re-imaging.
+0 connections. **Limitations:** detection latency ≈ one 15 s poll cycle (an EDR with
+kernel-level socket hooks would be immediate); the "no outbound from a web server" heuristic
+needs a per-role allow-list for services that *do* make egress (DB clients, update agents);
+and containment cuts the channel but not persistence — a full IR adds autostart FIM and
+re-imaging.
 
 ---
 
@@ -253,8 +259,13 @@ Intercept client↔service traffic
 (`mitm-net`) places `mitm-client` so its only route to Apache is through `mitm-interceptor`
 (a hijacked route; no ARP spoofing). The interceptor forwards (`ip_forward` + MASQUERADE) and
 captures the traffic: the full plaintext was recovered in transit — `GET / HTTP/1.1`,
-`HTTP/1.1 200 OK`, `Server: Apache/2.4.52`, the page body — proving an on-path attacker reads
-(and could alter) unencrypted traffic.
+`HTTP/1.1 200 OK`, `Server: Apache/2.4.52`, the page body — proving confidentiality loss. A
+second `active` mode goes further and proves **integrity** loss: an `iptables` REDIRECT sends
+the forwarded `:80` into a pure-stdlib transparent proxy (`active_mitm.py`, recovering the
+real target via `SO_ORIGINAL_DST`) that rewrites the response on-path. The client then
+received a page Apache never served — an injected banner *"MODIFIED IN TRANSIT BY AN ON-PATH
+ATTACKER"* and `<title>… It works (TAMPERED)</title>` (interceptor log:
+`10.255.255.241:80 TAMPERED (10834 B)`). So the attacker can both read and alter.
 
 **Detection.** Client-side: `traceroute` shows an extra hop (10.66.0.2, the interceptor) and
 replies arrive with `ttl=63` instead of 64 (one extra forwarding hop) — the route-hijack
@@ -262,9 +273,11 @@ signal.
 
 **Action-response.** TLS + certificate pinning / HSTS (defeats reading and makes an active
 MitM's substitute certificate fail), and routing hardening (`accept_redirects=0`,
-authenticated routes). Evidence: `threats/04-mitm/evidence/`. *(Active content modification
-would use a transparent proxy; mitmproxy is unpackaged on Debian trixie, so read-interception
-is shown via packet capture — the confidentiality break is identical.)*
+authenticated routes). TLS is what actually closes this threat: it makes the body ciphertext
+the proxy cannot rewrite, and pinning/HSTS makes an active attacker's substitute certificate
+fail. Evidence: `threats/04-mitm/evidence/` (read capture in `poc-run.md`, active tamper in
+`poc-active.md`). *(mitmproxy is unpackaged on Debian trixie, so both read and active
+modification are done with the standard library — no external tool needed.)*
 
 ---
 
