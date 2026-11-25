@@ -1,7 +1,7 @@
 # Threat 4 — Man-in-the-Middle / Route Hijacking (bonus)
 
 **Syllabus:** Route and signals hijacking. **Guide:** Practical Guide 5 §5.
-**Status: implemented and demonstrated** (read-interception + detection).
+**Status: implemented and demonstrated** (read-interception + active modification + detection).
 
 > Safety: isolated second subnet, **no ARP spoofing**, no campus/third-party traffic. The
 > interceptor is the client's legitimate gateway — this models a hijacked route, not L2 poisoning.
@@ -29,12 +29,21 @@ hardening (`accept_redirects=0`, authenticated routes).
 ```bash
 # on the VM
 bash threats/04-mitm/network.sh                                   # build topology
-incus exec mitm-interceptor -- bash /root/04-mitm/interceptor_setup.sh   # forward + capture
-incus exec mitm-client -- bash /root/04-mitm/detect.sh            # interception + detection
-# read captured plaintext:
+
+# --- PASSIVE: read-interception (confidentiality) ---
+incus exec mitm-interceptor -- bash /root/04-mitm/interceptor_setup.sh          # forward + capture
+incus exec mitm-client -- bash /root/04-mitm/detect.sh                          # interception + detection
 incus exec mitm-interceptor -- tcpdump -r /root/mitm-capture.pcap -A | grep -i 'GET\|Server:'
+
+# --- ACTIVE: on-path modification (integrity) ---
+incus exec mitm-interceptor -- bash /root/04-mitm/interceptor_setup.sh active   # REDIRECT :80 -> stdlib proxy
+incus exec mitm-client -- ip route replace default via 10.66.0.2
+incus exec mitm-client -- curl -s http://10.255.255.241/ | grep -i tampered     # page altered in transit
+
 # teardown
+incus exec mitm-interceptor -- bash -c 'iptables -t nat -D PREROUTING -i eth1 -p tcp --dport 80 -j REDIRECT --to-ports 8080; pkill -f active_mitm.py'
 incus stop mitm-client mitm-interceptor
 ```
 
-Evidence: [`evidence/poc-run.md`](evidence/poc-run.md).
+Evidence: [`evidence/poc-run.md`](evidence/poc-run.md) (read) ·
+[`evidence/poc-active.md`](evidence/poc-active.md) (active modification).
