@@ -9,10 +9,17 @@ set -euo pipefail
 
 NET=incus-default
 declare -A IP=(
+  # core (always-on)
   [wazuh-container]=10.255.255.4
   [prometheus-container]=10.255.255.153
   [soa-container]=10.255.255.204
   [apache-container]=10.255.255.241
+  # transient (per-threat; pinned so the configs/report addressing stay reproducible)
+  [mail-container]=10.255.255.206      # spam
+  [metasploit-container]=10.255.255.81 # C2
+  [load-client-a]=10.255.255.211       # DDoS
+  [load-client-b]=10.255.255.212       # DDoS
+  [mitm-interceptor]=10.255.255.227    # MitM (eth0 side; eth1 on mitm-net pinned by threats/04-mitm/network.sh)
 )
 
 if ! incus network show "$NET" >/dev/null 2>&1; then

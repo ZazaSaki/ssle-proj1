@@ -22,7 +22,8 @@ exporter + Incus per-container metrics) and `wazuh-container` (agents on the tar
 | apache-container | 10.255.255.241 | web victim (DoS/web + C2 victim); Wazuh agent 001 |
 | mail-container | 10.255.255.206 | Postfix/Dovecot/SpamAssassin; Wazuh agent 002 |
 | metasploit-container | 10.255.255.81 | Kali C2 (transient) |
-| load-client-a/b | dynamic | ApacheBench load generators (transient) |
+| load-client-a/b | 10.255.255.211 / .212 | ApacheBench load generators (transient) |
+| mitm-interceptor | 10.255.255.227 (+ mitm-net 10.66.0.2) | on-path interceptor, MitM bonus (transient) |
 
 ## Threats
 | # | Threat | Folder | Detection | Response |

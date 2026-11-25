@@ -58,12 +58,19 @@ Contributions:
 
 ## 3. Service Architecture Used
 
+![Managed service architecture with the Prometheus and Wazuh monitoring planes and the four threats](figures/architecture.svg)
+
+*Figure 1 — The managed temperature SOA on the isolated Incus bridge, monitored by two
+planes (Prometheus for performance/availability, Wazuh for security), with the four threats
+and their detection/response paths. Only externally reachable services (⚠) are attack
+surfaces; the registry and storage replicas are localhost-bound.*
+
 The managed system is a temperature-telemetry SOA (from Guide 1), deployed in
 `soa-container` and run as one `systemd` unit per component:
 
 ```
  sensor → ingestion(:5001) → storage ×2 (:5002/:5012, SQLite) ← analytics(:5003)
-                        �‑ discover/register ↑
+                        ↖ discover/register ↑
                    Service Registry (:5050, round-robin LB, health TTL + active probe)
 ```
 

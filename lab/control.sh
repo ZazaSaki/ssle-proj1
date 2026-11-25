@@ -7,7 +7,7 @@
 #   ./control.sh core  up|down
 #   ./control.sh ddos  up|down     # load-client-a, load-client-b
 #   ./control.sh spam  up|down     # mail-container
-#   ./control.sh c2    up|down     # metasploit-container, victim-container
+#   ./control.sh c2    up|down     # metasploit-container (victim = apache-container, in core)
 #   ./control.sh mitm  up|down     # mitm-client, mitm-interceptor
 #   ./control.sh status
 set -euo pipefail
@@ -16,7 +16,7 @@ CORE="wazuh-container prometheus-container soa-container apache-container"
 declare -A SET=(
   [ddos]="load-client-a load-client-b"
   [spam]="mail-container"
-  [c2]="metasploit-container victim-container"
+  [c2]="metasploit-container"
   [mitm]="mitm-client mitm-interceptor"
 )
 # Containers NOT part of this project (k3s, docker, …) are left stopped.
