@@ -34,12 +34,18 @@ exporter + Incus per-container metrics) and `wazuh-container` (agents on the tar
 | 4 | MitM (bonus) | [`threats/04-mitm`](threats/04-mitm) | extra hop / cert change | TLS + cert pinning |
 
 ## Repository layout
-- `architecture/` — SOA services + health exporter.
-- `monitoring/` — `prometheus.yml`, `soa_alerts.yml`, `remediate.sh` (rate-limit tool).
+- `architecture/` — SOA services + health exporter; `ratelimit.py` (per-identity token bucket).
+- `monitoring/` — `prometheus.yml`, `soa_alerts.yml`, `remediate.sh` (rate-limit tool),
+  `alertmanager.yml` + `install-alertmanager.sh` (root-cause alert correlation).
 - `siem/` — consolidated Wazuh decoders/rules + active-response + `install_siem.sh`.
+- `threats/00-attack-surface/` — post-foothold probe that **measures** the attack surface.
 - `threats/NN-*/` — per-threat setup, PoC scripts, `README.md`, `evidence/`.
+- `tools/` — measurement/rigor drivers: `correlation-demo.sh`, `scalability-sweep.sh`,
+  `identity-vs-ip-demo.sh`, `load_sensors.py`, `make-figures.py`.
 - `lab/` — `network.sh`, `genesis.sh` (rebuild core), `control.sh` (RAM-aware up/down).
-- `report/REPORT.md` — the full report.
+- `evidence/` — raw captures backing every headline number in the report.
+- `report/` — `REPORT.md` (full write-up), `report.tex`/`report.pdf` (compiled report), figures.
+- `REPRODUCE.md` — step-by-step end-to-end reproduction guide.
 
 ## Running it
 > **Memory:** the VM has 8 GB, no swap; Wazuh's indexer alone ≈ 2.3 GB. Keep a small core
@@ -56,7 +62,16 @@ bash lab/control.sh spam up   # ... run threats/02-spam ...   ; bash lab/control
 bash lab/control.sh c2   up   # ... run threats/03-c2  ...   ; bash lab/control.sh c2   down
 # SIEM content (fresh manager):
 bash siem/install_siem.sh
+# root-cause alert correlation (Alertmanager inhibition):
+bash monitoring/install-alertmanager.sh
+# measurement/rigor tools (produce evidence/ + report figures):
+bash tools/correlation-demo.sh        # cascade -> root cause
+bash tools/scalability-sweep.sh       # throughput/latency at N = 10/50/100
+bash tools/identity-vs-ip-demo.sh     # per-IP vs per-identity rate limiting
 ```
+
+> Full end-to-end reproduction (prerequisites, every command, evidence paths):
+> [`REPRODUCE.md`](REPRODUCE.md).
 
 Access the dashboards from your host by forwarding over SSH:
 ```bash
