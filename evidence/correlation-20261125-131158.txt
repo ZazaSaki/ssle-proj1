@@ -1,0 +1,29 @@
+==========================================================================
+ ROOT-CAUSE CORRELATION DEMO   date: 2026-11-25T13:11:58Z
+ fault injected: storage TIER outage (stop soa-storage-a + soa-storage-b)
+==========================================================================
+[0] baseline firing alerts: 2
+[1] INJECT fault ...
+    waiting 85s for the cascade to form ...
+
+--- Prometheus: the RAW cascade (every rule that is firing) ---
+  4 alerts firing:
+    - ServiceDown                  critical  pt.aveiro.dc1.rack01.node01/storage-service#5002
+    - ServiceDown                  critical  pt.aveiro.dc1.rack02.node04/storage-service#5012
+    - HighErrorRatio               warning   pt.aveiro.dc1.rack01.node01/analytics-service#5003
+    - HighErrorRatio               warning   pt.aveiro.dc1.rack01.node01/ingestion-service#5001
+
+--- Alertmanager: what the OPERATOR actually sees (after inhibition) ---
+  SHOWN  (root causes)   : 2
+    * ServiceDown (pt.aveiro.dc1.rack01.node01/storage-service#5002)
+    * ServiceDown (pt.aveiro.dc1.rack02.node04/storage-service#5012)
+  INHIBITED (symptoms)   : 2
+    - HighErrorRatio (pt.aveiro.dc1.rack01.node01/analytics-service#5003)
+    - HighErrorRatio (pt.aveiro.dc1.rack01.node01/ingestion-service#5001)
+
+  => 4 alerts fired; inhibition collapsed them to 2 cause(s) the operator must fix,
+     hiding 2 downstream symptom(s). Noise reduction: 50%.
+
+[2] RESTORE ...
+    restored; firing alerts cleared to: 2
+==========================================================================

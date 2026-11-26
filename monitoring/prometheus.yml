@@ -6,6 +6,13 @@ global:
 rule_files:
   - /etc/prometheus/soa_alerts.yml
 
+# Route fired alerts to Alertmanager (:9093) so its inhibition rules can collapse
+# a fault cascade to its root cause (see monitoring/alertmanager.yml).
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['localhost:9093']
+
 scrape_configs:
   - job_name: 'prometheus'
     static_configs:

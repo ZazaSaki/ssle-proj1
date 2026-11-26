@@ -1,4 +1,5 @@
 # Ingestion Service: entry point for sensor data -> validate, normalise, route to storage
+import os
 from datetime import datetime, timezone
 
 import requests
@@ -8,6 +9,15 @@ from common import discover, location_from_env, run_service
 
 app = Flask(__name__)
 SERVICE_NAME = "ingestion-service"
+
+# Optional per-IDENTITY rate limit (keyed on device_id, not source IP). OFF by default
+# so the baseline is unchanged; enabled with RATELIMIT=identity (see architecture/ratelimit.py).
+_RL_MODE = os.environ.get("RATELIMIT", "off")
+_rl = None
+if _RL_MODE == "identity":
+    from ratelimit import TokenBucketSet
+    _rl = TokenBucketSet(rate=float(os.environ.get("RL_RATE", "5")),
+                         burst=float(os.environ.get("RL_BURST", "10")))
 
 
 def normalise(data):
@@ -39,6 +49,10 @@ def ingest():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"error": "expected JSON object"}), 400
+    if _rl is not None:
+        device_id = data.get("device_id")
+        if device_id and not _rl.allow(device_id):
+            return jsonify({"error": "rate limit exceeded for this identity"}), 429
     try:
         reading = normalise(data)
     except ValueError as e:

@@ -1,0 +1,34 @@
+# Alertmanager for the SOA (prometheus-container, :9093).
+#
+# Purpose in this project: ROOT-CAUSE CORRELATION. A failure in a service-oriented
+# architecture produces a CASCADE of alerts — the one broken dependency plus every
+# downstream symptom it causes. Alertmanager's inhibition rules suppress the symptom
+# alerts while their cause is still firing, so the operator is shown the fault to fix,
+# not its consequences. (Grouping/notifications are secondary here; there is no pager.)
+global:
+  resolve_timeout: 1m
+
+route:
+  receiver: 'null'
+  group_by: ['alertname']
+  group_wait: 5s
+  group_interval: 10s
+  repeat_interval: 1h
+
+receivers:
+  - name: 'null'          # no external pager in the lab; the Alertmanager UI/API is the sink
+
+# CAUSES mute SYMPTOMS. In this single-registry, discovery-driven deployment a down
+# registry or a down service instance is the root cause of the downstream errors,
+# latency and QoS alerts, so those are muted incident-wide while a cause is active.
+inhibit_rules:
+  # 1. The registry is the central dependency: if it is down, discovery-driven
+  #    failures everywhere are consequences of that one fault.
+  - source_matchers: ['alertname = "RegistryDown"']
+    target_matchers:
+      - 'alertname =~ "HighErrorRatio|HighLatency|QoSDegraded_AnalyticsLatency|HighRequestRate|DoS_RequestFlood|DoS_TargetCPUSaturated|ServiceDown|ContainerHighCPU"'
+
+  # 2. A dead service instance explains downstream errors / latency / QoS loss.
+  - source_matchers: ['alertname = "ServiceDown"']
+    target_matchers:
+      - 'alertname =~ "HighErrorRatio|HighLatency|QoSDegraded_AnalyticsLatency|HighRequestRate"'

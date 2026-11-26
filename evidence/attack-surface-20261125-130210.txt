@@ -1,0 +1,34 @@
+==========================================================================
+ ATTACK-SURFACE PROBE  ·  position: inside soa-container, no credentials
+ date: 2026-11-25T13:02:10Z   host: soa-container
+==========================================================================
+--------------------------------------------------------------------------
+1. Discovery poisoning  (POST /register a decoy, then /discover returns it)
+  [ CONFIRMED ] unauthenticated /register injected a decoy and /discover handed clients the attacker URL
+      evidence: discover -> {"heartbeat_age_s":0.0,"instance_id":"pt.evil.dc9.rack9.node9/analytics-service#decoy","last_heartbeat":"2026-11-25T13:0
+--------------------------------------------------------------------------
+2. One-request DoS  (DELETE /unregister evicts a live instance)
+  [ CONFIRMED ] a single unauthenticated DELETE evicted a live storage instance (restored after check)
+      evidence: evicted pt.aveiro.dc1.rack01.node01/storage-service#5002 ; absent from /services immediately after the one request
+--------------------------------------------------------------------------
+3. Forged data  (POST /ingest a plausible reading from a sensor that does not exist)
+  [ CONFIRMED ] ingestion accepted a plausible reading from a device with no identity (HTTP 200)
+      evidence: POST /ingest device_id=pt.evil.dc9.rack9.node9/temp-sensor#ghost temperature=23.5C -> 200 ; a forged value is now stored indistinguishably from real (note: out-of-range 999.9 -> 400, so shape/range is validated, identity is not)
+--------------------------------------------------------------------------
+4. Topology leak  (GET /services hands out the rack/node map)
+  [ CONFIRMED ] unauthenticated /services exposed 4 instances with their physical location labels
+      evidence: locations seen: "location":"pt.aveiro.dc1.rack01.node01" "location":"pt.aveiro.dc1.rack02.node04" 
+--------------------------------------------------------------------------
+5. Monitoring plane  (can an attacker read/mute the detection stack?)
+  [ CONFIRMED ] Prometheus API answers unauthenticated (HTTP 200) — an attacker can read metrics and alerts
+      evidence: GET /api/v1/query?query=up -> 200 ; /api/v1/alerts visible (0 alert objects)
+  [  BLOCKED  ] Wazuh API not reachable unauthenticated from a foothold (HTTP 000)
+      evidence: GET https://10.255.255.4:55000/ -> 000 (TLS + API auth; not an open read like Prometheus)
+--------------------------------------------------------------------------
+6. Plaintext transport  (inter-service traffic is HTTP, not HTTPS)
+  [ CONFIRMED ] services answer on plain HTTP and refuse HTTPS — traffic is readable on-path (see Threat D)
+      evidence: http://...:5001/health -> 200 ; https://...:5001/health -> 000
+--------------------------------------------------------------------------
+SUMMARY: 6 of 7 checks CONFIRMED an exposure (adversary already on the service network).
+Controls that held: lab isolation (no egress), unprivileged hardened containers,
+localhost-binding of the registry/storage replicas (these are only reachable AFTER a foothold).

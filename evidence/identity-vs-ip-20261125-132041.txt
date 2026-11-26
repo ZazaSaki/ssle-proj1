@@ -1,0 +1,13 @@
+=== setup: client up, code + controls pushed ===
+
+########## PHASE 1: PER-IP limiter (iptables hashlimit on source IP) ##########
+rate limit: > 10/second new connections per source IP (burst 30) are dropped
+  result: {"sensors": 50, "duration_s": 17.0, "legit_ok": 185, "legit_429": 0, "legit_failed": 186, "legit_served_pct": 49.9, "throughput_rps": 10.9, "p50_ms": 3000.6, "p95_ms": 3025.9, "flood_ok": 0, "flood_429": 0, "flood_failed": 0}
+  legit sensors served: 49.9% ; connection-dropped: 186 ; iptables SYNs dropped: 685
+
+########## PHASE 2: PER-IDENTITY token bucket (keyed on device_id) ##########
+  result: {"sensors": 50, "duration_s": 16.4, "legit_ok": 1155, "legit_429": 0, "legit_failed": 67, "legit_served_pct": 94.5, "throughput_rps": 70.2, "p50_ms": 154.4, "p95_ms": 3001.0, "flood_ok": 67, "flood_429": 682, "flood_failed": 4}
+  legit sensors served: 94.5% ; flood 200s: 67 ; flood 429s (shed): 682
+
+=== cleanup ===
+DONE: per-IP throttled the legitimate multi-identity node; per-identity served it and shed the single-identity flood.
