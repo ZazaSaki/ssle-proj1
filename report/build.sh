@@ -5,7 +5,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 cd "$HERE"
 echo "=== SVG figures -> PDF (needs inkscape) ==="
-for f in architecture fig_scalability fig_correlation fig_identity_vs_ip fig_dos; do
+for f in architecture fig_scalability fig_correlation fig_identity_vs_ip fig_dos fig_spam fig_c2 fig_mitm; do
   [ -f "figures/$f.svg" ] && inkscape "$HERE/figures/$f.svg" --export-type=pdf \
     --export-filename="$HERE/figures/$f.pdf" >/dev/null 2>&1 && echo "  $f.pdf"
 done

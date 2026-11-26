@@ -283,8 +283,28 @@ anvil per-client rate limit.
 
 \noindent\textbf{Post-mortem.} GTUBE scored 1003/5.0; 16 spam sent with quarantine on
 $\rightarrow$ 16 held, 0 delivered; rules 100201/2/3 all fired; rate limit: 15 messages
-$\rightarrow$ 10 accepted, 5 rejected. \emph{Limitation:} GTUBE guarantees a verdict; real spam
-needs trained Bayes and risks false positives --- hence quarantine (reversible) over hard reject.
+$\rightarrow$ 10 accepted, 5 rejected (Figure~\ref{fig:spam}, Listing~\ref{lst:spam}). \emph{Limitation:}
+GTUBE guarantees a verdict; real spam needs trained Bayes and risks false positives --- hence
+quarantine (reversible) over hard reject.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.86\linewidth]{fig_spam.pdf}
+  \caption{Threat 2 (Spam): with quarantine on, all 16 flagged messages are held and 0 reach the
+  mailbox; the Postfix per-client rate limit caps 15 sent at 10 accepted / 5 rejected. GTUBE
+  scored 1003.7 against the 5.0 threshold.}
+  \label{fig:spam}
+\end{figure}
+
+\begin{lstlisting}[caption={Threat 2 evidence: SpamAssassin verdict $\rightarrow$ Wazuh escalation $\rightarrow$ quarantine.},label=lst:spam]
+# SpamAssassin verdict (mail.log, shipped by Wazuh agent 002)
+spamd: identified spam (1003.7/5.0) for root:65534 in 0.1 s
+# Wazuh escalation (spamassassin_decoders.xml -> spam_rules.xml)
+rule 100201 (lvl 5)  Spam detected by SpamAssassin (score 1003.7/5.0)
+rule 100202 (lvl 10) High-confidence spam (score >= 100)            x56
+rule 100203 (lvl 12) Spam campaign: 10+ messages in 60 s            x3
+# Response (mail_controls.sh quarantine on): 16 sent -> 16 HELD, 0 delivered
+\end{lstlisting}
 
 % ---------- threat 3 ----------
 \subsection{Threat C --- Command-and-Control / Botnet (APT)}
@@ -317,9 +337,32 @@ server's outbound shell, kills the owning process, and DROPs egress to that peer
 
 \noindent\textbf{Post-mortem.} Session opened (\code{.81:4444 -> .241}); FIM and C2 alerts both
 fired; containment killed the process and blocked egress; re-run payload $\rightarrow$ 0
-connections. \emph{Limitations:} detection latency $\approx$ one 15\,s poll (an EDR with kernel
-socket hooks would be immediate); the ``no outbound from a web server'' heuristic needs a per-role
-allow-list; containment cuts the channel but not persistence.
+connections (Figure~\ref{fig:c2}, Listing~\ref{lst:c2}). \emph{Limitations:} detection latency
+$\approx$ one 15\,s poll (an EDR with kernel socket hooks would be immediate); the ``no outbound
+from a web server'' heuristic needs a per-role allow-list; containment cuts the channel but not
+persistence.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\linewidth]{fig_c2.pdf}
+  \caption{Threat 3 (C2): the FIM rule fires on the dropped payload and the egress monitor flags
+  the live reverse shell within one 15\,s cycle; \code{c2-contain} then kills the process and drops
+  egress, taking active C2 connections from 1 to 0.}
+  \label{fig:c2}
+\end{figure}
+
+\begin{lstlisting}[caption={Threat 3 evidence: reverse shell $\rightarrow$ two-angle detection $\rightarrow$ automatic containment.},label=lst:c2]
+# C2 established (metasploit-container -> apache-container)
+[*] Meterpreter session 1 opened (10.255.255.81:4444 -> 10.255.255.241:57178)
+# Wazuh detection (apache-container, agent 001)
+rule 100301 (lvl 10) Suspicious file in loot dir (/root/loot/payload.elf)   [FIM]
+rule 100300 (lvl 12) C2 channel: established reverse shell   [C2CHECK peer=...:4444]
+# Automatic containment (c2-contain.sh, <= 15 s after)
+2026-11-24 18:52:08 c2-contain: killed pid 4021
+2026-11-24 18:52:08 c2-contain: blocked egress tcp/4444
+# Re-run payload after containment:
+conn_after_block=0
+\end{lstlisting}
 
 % ---------- threat 4 ----------
 \subsection{Threat D --- Man-in-the-Middle / Route hijacking (bonus)}\label{sec:t4}
@@ -342,7 +385,7 @@ Intercept client<->service traffic
 proves \textbf{integrity} loss: an \code{iptables} REDIRECT sends the forwarded \code{:80} into a
 pure-stdlib transparent proxy (\code{active\_mitm.py}, recovering the target via
 \code{SO\_ORIGINAL\_DST}) that rewrites the response; the client received an injected banner and a
-\code{(TAMPERED)} title the server never served.
+\code{(TAMPERED)} title the server never served (Figure~\ref{fig:mitm}, Listing~\ref{lst:mitm}).
 
 \noindent\textbf{Detection \& response.} Client-side \code{traceroute} shows an extra hop
 (\code{10.66.0.2}) and \code{ttl=63} instead of 64 --- the route-hijack signal. TLS is what closes
@@ -350,6 +393,28 @@ the threat: it makes the body ciphertext the proxy cannot rewrite, and pinning/H
 attacker's substitute certificate fail; routing hardening (\code{accept\_redirects=0}) complements
 it. (mitmproxy is unpackaged on Debian trixie, so both read and active modes use the standard
 library only.)
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\linewidth]{fig_mitm.pdf}
+  \caption{Threat 4 (MitM): the inserted gateway shows up as a TTL decrement (64$\rightarrow$63,
+  one extra hop); in active mode the on-path proxy rewrites Apache's page, so the client renders a
+  \code{(TAMPERED)} title and an injected banner the server never sent.}
+  \label{fig:mitm}
+\end{figure}
+
+\begin{lstlisting}[caption={Threat 4 evidence: plaintext captured on-path, the page altered in transit, and the client-side detection.},label=lst:mitm]
+# PASSIVE: full plaintext captured on-path (/root/cap3.pcap, 12 pkts)
+interceptor > apache.http:  GET / HTTP/1.1
+apache.http > interceptor:  HTTP/1.1 200 OK   Server: Apache/2.4.52 (Ubuntu)
+<title>Apache2 Ubuntu Default Page: It works</title>
+# ACTIVE: the client received a page Apache never served
+[mitm] 10.255.255.241:80  TAMPERED (10834 B)
+<title>... It works (TAMPERED)</title>
+<div ...> [!] THIS PAGE WAS MODIFIED IN TRANSIT BY AN ON-PATH ATTACKER </div>
+# DETECTION (client-side): extra hop + TTL decrement
+traceroute 10.255.255.241 -> hop 1 = 10.66.0.2 ;  reply ttl=63 (not 64)
+\end{lstlisting}
 
 % =====================================================================
 \section{Evaluation and Scalability}\label{sec:eval}
@@ -497,7 +562,9 @@ Correlation (Fig.~\ref{fig:corr}) & \code{tools/correlation-demo.sh} & \code{evi
 Scalability (Table~\ref{tab:scale}, Fig.~\ref{fig:scale}) & \code{tools/scalability-sweep.sh} & \code{evidence/scalability-*.csv}\\
 Identity vs IP (Table~\ref{tab:identity}, Fig.~\ref{fig:identity}) & \code{tools/identity-vs-ip-demo.sh} & \code{evidence/identity-vs-ip-*.txt}\\
 DoS before/after (Fig.~\ref{fig:dos}) & \code{threats/01-ddos/run.sh} & \code{threats/01-ddos/evidence/}\\
-Threats B/C/D PoCs & \code{threats/0\{2,3,4\}-*/} & \code{threats/0\{2,3,4\}-*/evidence/}\\
+Spam defenses (Fig.~\ref{fig:spam}, Lst.~\ref{lst:spam}) & \code{threats/02-spam/spam.py} & \code{threats/02-spam/evidence/poc-run.md}\\
+C2 detect+contain (Fig.~\ref{fig:c2}, Lst.~\ref{lst:c2}) & \code{threats/03-c2/*} & \code{threats/03-c2/evidence/poc-run.md}\\
+MitM intercept+tamper (Fig.~\ref{fig:mitm}, Lst.~\ref{lst:mitm}) & \code{threats/04-mitm/*} & \code{threats/04-mitm/evidence/poc-\{run,active\}.md}\\
 SIEM rules + active response & \code{siem/install\_siem.sh} & Wazuh manager alerts\\
 \bottomrule
 \end{tabular}
