@@ -1,0 +1,49 @@
+Source: fresh checkout of https://github.com/ZazaSaki/ssle-proj1 (tarball) on the VM, dir ~/ssle-proj1-repro
+HEAD: 5b9a407
+
+############ genesis.sh (idempotent re-run after a cold-start settle race on first run) ############
+mitm-client,STOPPED,
+mitm-interceptor,STOPPED,
+prometheus-container,RUNNING,10.255.255.153 (eth0)
+soa-container,RUNNING,10.255.255.204 (eth0)
+wazuh-container,RUNNING,10.255.255.4 (eth0)
+memory: used 4066 MB, avail 6623 MB
+
+############ attack-surface probe (pushed from clone, run inside soa-container) ############
+    [ CONFIRMED ] unauthenticated /register injected a decoy and /discover handed clients the attacker URL
+    [ CONFIRMED ] a single unauthenticated DELETE evicted a live storage instance (restored after check)
+    [ CONFIRMED ] ingestion accepted a plausible reading from a device with no identity (HTTP 200)
+    [ CONFIRMED ] unauthenticated /services exposed 4 instances with their physical location labels
+    [ CONFIRMED ] Prometheus API answers unauthenticated (HTTP 200) — an attacker can read metrics and alerts
+    [  BLOCKED  ] Wazuh API not reachable unauthenticated from a foothold (HTTP 401)
+    [ CONFIRMED ] services answer on plain HTTP and refuse HTTPS — traffic is readable on-path (see Threat D)
+  SUMMARY: 6 of 7 checks CONFIRMED an exposure (adversary already on the service network).
+
+############ correlation-demo.sh ############
+--- Prometheus: the RAW cascade (every rule that is firing) ---
+  4 alerts firing:
+    - ServiceDown                  critical  pt.aveiro.dc1.rack01.node01/storage-service#5002
+    - ServiceDown                  critical  pt.aveiro.dc1.rack02.node04/storage-service#5012
+    - HighErrorRatio               warning   pt.aveiro.dc1.rack01.node01/analytics-service#5003
+    - HighErrorRatio               warning   pt.aveiro.dc1.rack01.node01/ingestion-service#5001
+
+--- Alertmanager: what the OPERATOR actually sees (after inhibition) ---
+  SHOWN  (root causes)   : 2
+    * ServiceDown (pt.aveiro.dc1.rack01.node01/storage-service#5002)
+    * ServiceDown (pt.aveiro.dc1.rack02.node04/storage-service#5012)
+  INHIBITED (symptoms)   : 2
+    - HighErrorRatio (pt.aveiro.dc1.rack01.node01/analytics-service#5003)
+    - HighErrorRatio (pt.aveiro.dc1.rack01.node01/ingestion-service#5001)
+
+  => 4 alerts fired; inhibition collapsed them to 2 cause(s) the operator must fix,
+     hiding 2 downstream symptom(s). Noise reduction: 50%.
+
+############ identity-vs-ip-demo.sh ############
+########## PHASE 1: PER-IP limiter (iptables hashlimit on source IP) ##########
+  legit sensors served: 48.4% ; connection-dropped: 208 ; iptables SYNs dropped: 772
+########## PHASE 2: PER-IDENTITY token bucket (keyed on device_id) ##########
+  legit sensors served: 86.3% ; flood 200s: 82 ; flood 429s (shed): 2278
+DONE: per-IP throttled the legitimate multi-identity node; per-identity served it and shed the single-identity flood.
+
+############ post-run cleanliness ############
+  SOA units all active/running; registry: analytics=1 ingestion=1 storage=2; no iptables guard chain; no RATELIMIT drop-in; load-client STOPPED

@@ -13,10 +13,18 @@ IMG=images:debian/trixie
 
 say(){ echo -e "\n=== $*"; }
 
+ready(){ # ready <name> — wait until the container accepts exec (agent up), so a cold
+         # first run does not race `incus exec` against a still-booting container.
+  local c=$1 i
+  for i in $(seq 1 30); do incus exec "$c" -- true >/dev/null 2>&1 && return 0; sleep 2; done
+  echo "warning: $c not ready after 60s" >&2
+}
+
 launch(){ # launch <name> [image]
   local c=$1 img=${2:-$IMG}
   if incus info "$c" >/dev/null 2>&1; then echo "$c exists"; incus start "$c" 2>/dev/null || true
   else say "launching $c ($img)"; incus launch "$img" "$c"; sleep 8; fi
+  ready "$c"
 }
 
 # ---------- network ----------
@@ -29,14 +37,14 @@ incus file push -q "$HERE"/architecture/*.py "$HERE"/architecture/dashboard.html
 incus file push -q "$HERE"/architecture/setup_soa_container.sh soa-container/opt/soa/
 incus config device get soa-container eth0 ipv4.address >/dev/null 2>&1 || \
   incus config device override soa-container eth0 ipv4.address=10.255.255.204
-incus restart soa-container; sleep 6
+incus restart soa-container; ready soa-container
 say "SOA setup (systemd units)"; incus exec soa-container -- bash /opt/soa/setup_soa_container.sh </dev/null | grep -v debconf || true
 
 # ---------- Prometheus (prometheus-container) ----------
 launch prometheus-container
 incus config device get prometheus-container eth0 ipv4.address >/dev/null 2>&1 || \
   incus config device override prometheus-container eth0 ipv4.address=10.255.255.153
-incus restart prometheus-container; sleep 6
+incus restart prometheus-container; ready prometheus-container
 say "Prometheus install + config"
 incus exec prometheus-container -- bash -c 'command -v prometheus >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq prometheus >/dev/null 2>&1; }' </dev/null
 incus file push -q "$HERE"/monitoring/prometheus.yml "$HERE"/monitoring/soa_alerts.yml prometheus-container/etc/prometheus/
@@ -52,7 +60,7 @@ say "prometheus: $(incus exec prometheus-container -- systemctl is-active promet
 launch apache-container "images:ubuntu/22.04"
 incus config device get apache-container eth0 ipv4.address >/dev/null 2>&1 || \
   incus config device override apache-container eth0 ipv4.address=10.255.255.241
-incus start apache-container 2>/dev/null || true; sleep 4
+incus start apache-container 2>/dev/null || true; ready apache-container
 incus exec apache-container -- bash -c 'command -v apache2ctl >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq apache2 curl iptables >/dev/null; }' </dev/null
 say "apache: $(incus exec apache-container -- systemctl is-active apache2 </dev/null)"
 echo "(Wazuh server + agent enrolment: see README; not re-run here to save RAM/time.)"
